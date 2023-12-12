@@ -1,0 +1,60 @@
+app.get('/save2', async (req, res) => {
+  try {
+    // Connect to Telegram
+    await client.connect();
+
+    // Replace 'channelUsername' with the actual username of the channel (e.g., 't.me/example_channel')
+    const channelUsername = 'breachdetector';
+
+    // Replace 'limit' with the number of messages you want to retrieve
+    const limit = 1000;
+    let maxId = 3000;
+    let minId = 1000;
+
+    // Array to store messages for bulk insert
+    let messagesToInsert = [];
+
+    // Fetch messages from Telegram
+    while (maxId < 400000) {
+      const messages = await client.getMessages(channelUsername, { maxId, minId });
+
+      // Process messages for bulk insert
+      for (const telegramMessage of messages) {
+        const exists = await Message.exists({ Mid: telegramMessage.id });
+        if (!exists && telegramMessage.message) {
+          const newMessage = {
+            content: telegramMessage.message,
+            Mid: telegramMessage.id,
+            // Add other fields as needed
+          };
+          messagesToInsert.push(newMessage);
+        }
+      }
+
+      // Perform bulk insert
+      if (messagesToInsert.length > 0) {
+        await Message.insertMany(messagesToInsert);
+        console.log('Messages saved to MongoDB');
+
+        // Clear the array for the next batch
+        messagesToInsert = [];
+
+        // Introduce a 10-second delay
+        await delay(30000);
+      }
+
+      minId = maxId;
+      maxId = maxId + 3000;
+    }
+
+    res.json({ message: 'Messages saved successfully' });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error });
+  }
+});
+
+// Helper function to introduce a delay
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
